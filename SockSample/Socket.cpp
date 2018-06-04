@@ -4,6 +4,7 @@
 #include <process.h>
 #include <windows.h>
 #include <winsock2.h>
+#include <processthreadsapi.h>
 
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
@@ -26,14 +27,23 @@ SocketBase::~SocketBase()
   WSACleanup();
 }
 
+void SocketBase::Close()
+{
+  shutdown(sock_, SD_BOTH);
+  closesocket(sock_);
+}
+
 void TCPSocketSrv::AcceptThread(void * arg)
 {
   TCPSocketSrv* srv = (TCPSocketSrv*)arg;
-  auto sock = accept(srv->sock_, NULL, NULL);
-  if (sock == INVALID_SOCKET)
-    _endthread();
+  while (true)
+  {
+    auto sock = accept(srv->sock_, NULL, NULL);
+    if (sock == INVALID_SOCKET)
+      _endthread();
 
-  FD_SET(sock, &srv->s_read_);
+    FD_SET(sock, &srv->s_read_);
+  }
 }
 
 TCPSocketSrv::TCPSocketSrv()
@@ -42,6 +52,7 @@ TCPSocketSrv::TCPSocketSrv()
 
 TCPSocketSrv::~TCPSocketSrv()
 {
+  TerminateThread(HandleAcceptThread_, 0);
 }
 
 bool TCPSocketSrv::Open(unsigned short port, const char* ip)
@@ -70,7 +81,7 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
 
   FD_ZERO(&s_read_);
 
-  _beginthread(AcceptThread, 0, this);
+  HandleAcceptThread_ = (HANDLE)_beginthread(AcceptThread, 0, this);
 
   return true;
 }
@@ -144,6 +155,8 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
   if (sock_ == SOCKET_ERROR)
     return false;
 
+  FD_ZERO(&s_read_);
+  FD_SET(sock_, &s_read_);
   return true;
 }
 
@@ -155,6 +168,12 @@ int TCPSocketClt::Send(const char * data, size_t dataLen)
 const char * TCPSocketClt::Recv(SOCKET & srcSock, size_t & dataLen)
 {
   memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
+  timeval tim;
+  tim.tv_sec = 1;
+  auto sockCount = select(0, &s_read_, NULL, NULL, &tim);
+  if (sockCount <= 0)
+    return recvBuff_;
+
   auto recvBytes = recv(sock_, &recvBuff_[0], SO_MAX_MSG_SIZE, MSG_PEEK);
   if (recvBytes)
   {
@@ -163,7 +182,7 @@ const char * TCPSocketClt::Recv(SOCKET & srcSock, size_t & dataLen)
     srcSock = sock_;
     dataLen = recvBytes;
     return recvBuff_;
-    
+
   }
   return recvBuff_;
 }
