@@ -23,7 +23,6 @@ SocketBase::SocketBase()
 
 SocketBase::~SocketBase()
 {
-  freeaddrinfo(resultAddr_);
   WSACleanup();
 }
 
@@ -33,30 +32,17 @@ void SocketBase::Close()
   closesocket(sock_);
 }
 
-void TCPSocketSrv::AcceptThread(void * arg)
-{
-  TCPSocketSrv* srv = (TCPSocketSrv*)arg;
-  while (true)
-  {
-    auto sock = accept(srv->sock_, NULL, NULL);
-    if (sock == INVALID_SOCKET)
-      _endthread();
-
-    FD_SET(sock, &srv->s_read_);
-  }
-}
-
 TCPSocketSrv::TCPSocketSrv()
 {
 }
 
 TCPSocketSrv::~TCPSocketSrv()
 {
-  TerminateThread(HandleAcceptThread_, 0);
 }
 
 bool TCPSocketSrv::Open(unsigned short port, const char* ip)
 {
+  ADDRINFO *resultAddr;
   ADDRINFO localaddr_;
   ZeroMemory(&localaddr_, sizeof(localaddr_));
   localaddr_.ai_family = AF_INET;
@@ -67,21 +53,26 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
   char portValue[6];
   _itoa_s(port, portValue, 10);
 
-  getaddrinfo(NULL, portValue, &localaddr_, &resultAddr_);
+  getaddrinfo(NULL, portValue, &localaddr_, &resultAddr);
 
-  sock_ = socket(resultAddr_->ai_family, resultAddr_->ai_socktype, resultAddr_->ai_protocol);
+  sock_ = socket(resultAddr->ai_family, resultAddr->ai_socktype, resultAddr->ai_protocol);
   if (sock_ == INVALID_SOCKET)
     return false;
 
-  if (bind(sock_, resultAddr_->ai_addr, (int)resultAddr_->ai_addrlen) == SOCKET_ERROR)
+  u_long nonBlockMode = 1;
+  if (ioctlsocket(sock_, FIONBIO, &nonBlockMode) != NO_ERROR)
+    return false;
+
+  if (bind(sock_, resultAddr->ai_addr, (int)resultAddr->ai_addrlen) == SOCKET_ERROR)
     return false;
 
   if (listen(sock_, SOMAXCONN) == SOCKET_ERROR)
     return false;
 
-  FD_ZERO(&s_read_);
+  freeaddrinfo(resultAddr);
 
-  HandleAcceptThread_ = (HANDLE)_beginthread(AcceptThread, 0, this);
+  FD_ZERO(&s_read_);
+  FD_SET(sock_, &s_read_);
 
   return true;
 }
@@ -94,14 +85,26 @@ int TCPSocketSrv::Send(SOCKET destSock, const char * data, size_t dataLen)
 const char * TCPSocketSrv::Recv(SOCKET & srcSock, size_t & dataLen)
 {
   memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
+  dataLen = 0;
+  srcSock = INVALID_SOCKET;
+
+  Sleep(1);
+  while (auto sock = accept(sock_, NULL, NULL))
+  {
+    if (sock == INVALID_SOCKET)
+      break;
+    FD_SET(sock, &s_read_);
+  }
+  fd_set fdset = s_read_;
+
   timeval tim;
   tim.tv_sec = 1;
-  auto sockCount = select(0, &s_read_, NULL, NULL, &tim);
+  auto sockCount = select(0, &fdset, NULL, NULL, &tim);
   if (sockCount <= 0)
     return recvBuff_;
 
-  for (auto sock : s_read_.fd_array)
-    if (FD_ISSET(sock, &s_read_))
+  for (auto sock : fdset.fd_array)
+    if (FD_ISSET(sock, &fdset))
     {
       auto recvBytes = recv(sock, &recvBuff_[0], SO_MAX_MSG_SIZE, MSG_PEEK);
       if (recvBytes)
@@ -126,6 +129,7 @@ TCPSocketClt::~TCPSocketClt()
 
 bool TCPSocketClt::Open(unsigned short port, const char* ip)
 {
+  ADDRINFO *resultAddr;
   ADDRINFO localaddr_;
   ZeroMemory(&localaddr_, sizeof(localaddr_));
   localaddr_.ai_family = AF_INET;
@@ -135,9 +139,9 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
   char portValue[6];
   _itoa_s(port, portValue, 10);
 
-  getaddrinfo(NULL, portValue, &localaddr_, &resultAddr_);
+  getaddrinfo(NULL, portValue, &localaddr_, &resultAddr);
 
-  for (auto ptr = resultAddr_; ptr != NULL; ptr = ptr->ai_next) {
+  for (auto ptr = resultAddr; ptr != NULL; ptr = ptr->ai_next) {
 
     sock_ = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
     if (sock_ == INVALID_SOCKET)
@@ -157,6 +161,7 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
 
   FD_ZERO(&s_read_);
   FD_SET(sock_, &s_read_);
+  freeaddrinfo(resultAddr);
   return true;
 }
 
@@ -168,21 +173,36 @@ int TCPSocketClt::Send(const char * data, size_t dataLen)
 const char * TCPSocketClt::Recv(SOCKET & srcSock, size_t & dataLen)
 {
   memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
+  dataLen = 0;
+  srcSock = INVALID_SOCKET;
+
+  Sleep(1);
+  while (auto sock = accept(sock_, NULL, NULL))
+  {
+    if (sock == INVALID_SOCKET)
+      break;
+    FD_SET(sock, &s_read_);
+  }
+  fd_set fdset = s_read_;
+
   timeval tim;
   tim.tv_sec = 1;
-  auto sockCount = select(0, &s_read_, NULL, NULL, &tim);
+  auto sockCount = select(0, &fdset, NULL, NULL, &tim);
   if (sockCount <= 0)
     return recvBuff_;
 
-  auto recvBytes = recv(sock_, &recvBuff_[0], SO_MAX_MSG_SIZE, MSG_PEEK);
-  if (recvBytes)
-  {
-    memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
-    recv(sock_, &recvBuff_[0], recvBytes, 0);
-    srcSock = sock_;
-    dataLen = recvBytes;
-    return recvBuff_;
-
-  }
+  for (auto sock : fdset.fd_array)
+    if (FD_ISSET(sock, &fdset))
+    {
+      auto recvBytes = recv(sock, &recvBuff_[0], SO_MAX_MSG_SIZE, MSG_PEEK);
+      if (recvBytes)
+      {
+        memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
+        recv(sock, &recvBuff_[0], recvBytes, 0);
+        srcSock = sock;
+        dataLen = recvBytes;
+        return recvBuff_;
+      }
+    }
   return recvBuff_;
 }
