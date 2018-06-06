@@ -2,7 +2,9 @@
 #if !defined(SOCKETCLASS_H)
 #define SOCKETCLASS_H
 
+#if defined(WIN32)
 #include <WS2tcpip.h>
+#endif
 
 class SocketBase
 {
