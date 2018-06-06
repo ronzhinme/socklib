@@ -1,4 +1,3 @@
-#include "stdafx.h"
 #include "Socket.h"
 
 #include <process.h>
