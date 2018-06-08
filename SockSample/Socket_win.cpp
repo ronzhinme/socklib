@@ -1,3 +1,6 @@
+
+#if defined(WIN32)
+
 #include "Socket.h"
 
 #include <process.h>
@@ -168,4 +171,4 @@ int TCPSocketClt::Send(const char * data, size_t dataLen)
 {
   return SendData(sock_, data, dataLen);
 }
-
+#endif

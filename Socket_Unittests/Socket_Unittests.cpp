@@ -2,11 +2,13 @@
 
 #include <string>
 
+#if defined(WIN32)
 #include "../SockSample/BytesData.h"
 #include "../SockSample/BytesData.cpp"
 #include "../SockSample/Socket.h"
-#if defined(WIN32)
 #include "../SockSample/Socket_win.cpp"
+#elif defined(LINUX)
+#include "../SockSample/Socket.h"
 #endif
 
 TEST(SocketClassTests, ServerOpenTest) {
@@ -140,3 +142,10 @@ TEST(SocketClassTests, ManyClientsSendAndRecvTest) {
     EXPECT_TRUE(sData.compare(0, sData.length(), (*cltRecvData.begin()).second.Bytes, 0, (*cltRecvData.begin()).second.Count) == 0);
   }
 }
+
+#if defined(LINUX)
+int main(int argc, char **argv) {
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+#endif

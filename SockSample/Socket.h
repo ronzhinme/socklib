@@ -3,10 +3,12 @@
 #define SOCKETCLASS_H
 
 #include "BytesData.h"
+#include <map>
 
 #if defined(WIN32)
 #include <WS2tcpip.h>
-#include <map>
+#elif defined(LINUX)
+#define SOCKET int
 #endif
 
 class SocketBase
@@ -16,6 +18,7 @@ protected:
   fd_set s_read_;
   int SendData(SOCKET destSock, const char *data, size_t dataLen);
   fd_set GetAcceptedSockets(SOCKET sock);
+
 public:
   SocketBase();
   virtual ~SocketBase();
