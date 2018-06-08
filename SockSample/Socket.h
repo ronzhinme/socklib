@@ -2,22 +2,25 @@
 #if !defined(SOCKETCLASS_H)
 #define SOCKETCLASS_H
 
+#include "BytesData.h"
+
 #if defined(WIN32)
 #include <WS2tcpip.h>
+#include <map>
 #endif
 
 class SocketBase
 {
 protected:
   SOCKET sock_;
-  char recvBuff_[SO_MAX_MSG_SIZE];
   fd_set s_read_;
   int SendData(SOCKET destSock, const char *data, size_t dataLen);
+  fd_set GetAcceptedSockets(SOCKET sock);
 public:
   SocketBase();
   virtual ~SocketBase();
   virtual bool Open(unsigned short port, const char *ip = NULL) = 0;
-  virtual const char* Recv(SOCKET &srcSock, size_t &dataLen) = 0;
+  virtual std::map<SOCKET, BytesData> Recv();
   virtual void Close();
 };
 
@@ -28,7 +31,6 @@ public:
   ~TCPSocketSrv();
   bool Open(unsigned short port, const char *ip = NULL);
   int Send(SOCKET destSock, const char *data, size_t dataLen);
-  const char* Recv(SOCKET &srcSock, size_t &dataLen);
 };
 
 class TCPSocketClt : public SocketBase
@@ -38,7 +40,6 @@ public:
   ~TCPSocketClt();
   bool Open(unsigned short port, const char *ip = NULL);
   int Send(const char *data, size_t dataLen);
-  const char* Recv(SOCKET &srcSock, size_t &dataLen);
 };
 
 #endif

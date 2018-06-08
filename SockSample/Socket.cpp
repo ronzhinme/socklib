@@ -14,6 +14,17 @@ int SocketBase::SendData(SOCKET destSock, const char * data, size_t dataLen)
   return send(destSock, data, dataLen, 0);
 }
 
+fd_set SocketBase::GetAcceptedSockets(SOCKET sock)
+{
+  while (auto acceptedSock = accept(sock, NULL, NULL))
+  {
+    if (acceptedSock == INVALID_SOCKET)
+      break;
+    FD_SET(acceptedSock, &s_read_);
+  }
+  return s_read_;
+}
+
 SocketBase::SocketBase()
 {
   WSADATA wsaData;
@@ -23,6 +34,32 @@ SocketBase::SocketBase()
 SocketBase::~SocketBase()
 {
   WSACleanup();
+}
+
+std::map<SOCKET, BytesData> SocketBase::Recv()
+{
+  std::map<SOCKET, BytesData> recvData;
+  char recvBuff[SO_MAX_MSG_SIZE];
+
+  Sleep(1);
+  fd_set fdset = GetAcceptedSockets(sock_);
+
+  auto sockCount = select(0, &fdset, NULL, NULL, NULL);
+  if (sockCount <= 0)
+    return recvData;
+
+  for (auto sock : fdset.fd_array)
+    if (FD_ISSET(sock, &fdset))
+    {
+      auto recvBytes = recv(sock, &recvBuff[0], SO_MAX_MSG_SIZE, MSG_PEEK);
+      if (recvBytes <= 0)
+        return recvData;
+
+      memset((void*)&recvBuff[0], 0, SO_MAX_MSG_SIZE);
+      recv(sock, &recvBuff[0], recvBytes, 0);
+      recvData.emplace(sock, BytesData(recvBuff, recvBytes));
+    }
+  return recvData;
 }
 
 void SocketBase::Close()
@@ -81,43 +118,6 @@ int TCPSocketSrv::Send(SOCKET destSock, const char * data, size_t dataLen)
   return SendData(destSock, data, dataLen);
 }
 
-const char * TCPSocketSrv::Recv(SOCKET & srcSock, size_t & dataLen)
-{
-  memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
-  dataLen = 0;
-  srcSock = INVALID_SOCKET;
-
-  Sleep(1);
-  while (auto sock = accept(sock_, NULL, NULL))
-  {
-    if (sock == INVALID_SOCKET)
-      break;
-    FD_SET(sock, &s_read_);
-  }
-  fd_set fdset = s_read_;
-
-  timeval tim;
-  tim.tv_sec = 1;
-  auto sockCount = select(0, &fdset, NULL, NULL, &tim);
-  if (sockCount <= 0)
-    return recvBuff_;
-
-  for (auto sock : fdset.fd_array)
-    if (FD_ISSET(sock, &fdset))
-    {
-      auto recvBytes = recv(sock, &recvBuff_[0], SO_MAX_MSG_SIZE, MSG_PEEK);
-      if (recvBytes)
-      {
-        memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
-        recv(sock, &recvBuff_[0], recvBytes, 0);
-        srcSock = sock;
-        dataLen = recvBytes;
-        return recvBuff_;
-      }
-    }
-  return recvBuff_;
-}
-
 TCPSocketClt::TCPSocketClt()
 {
 }
@@ -169,39 +169,3 @@ int TCPSocketClt::Send(const char * data, size_t dataLen)
   return SendData(sock_, data, dataLen);
 }
 
-const char * TCPSocketClt::Recv(SOCKET & srcSock, size_t & dataLen)
-{
-  memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
-  dataLen = 0;
-  srcSock = INVALID_SOCKET;
-
-  Sleep(1);
-  while (auto sock = accept(sock_, NULL, NULL))
-  {
-    if (sock == INVALID_SOCKET)
-      break;
-    FD_SET(sock, &s_read_);
-  }
-  fd_set fdset = s_read_;
-
-  timeval tim;
-  tim.tv_sec = 1;
-  auto sockCount = select(0, &fdset, NULL, NULL, &tim);
-  if (sockCount <= 0)
-    return recvBuff_;
-
-  for (auto sock : fdset.fd_array)
-    if (FD_ISSET(sock, &fdset))
-    {
-      auto recvBytes = recv(sock, &recvBuff_[0], SO_MAX_MSG_SIZE, MSG_PEEK);
-      if (recvBytes)
-      {
-        memset((void*)&recvBuff_[0], 0, SO_MAX_MSG_SIZE);
-        recv(sock, &recvBuff_[0], recvBytes, 0);
-        srcSock = sock;
-        dataLen = recvBytes;
-        return recvBuff_;
-      }
-    }
-  return recvBuff_;
-}
