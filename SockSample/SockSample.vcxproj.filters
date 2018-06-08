@@ -23,10 +23,10 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Socket.cpp">
+    <ClCompile Include="BytesData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="BytesData.cpp">
+    <ClCompile Include="Socket_win.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

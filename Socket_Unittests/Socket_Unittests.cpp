@@ -5,7 +5,9 @@
 #include "../SockSample/BytesData.h"
 #include "../SockSample/BytesData.cpp"
 #include "../SockSample/Socket.h"
-#include "../SockSample/Socket.cpp"
+#if defined(WIN32)
+#include "../SockSample/Socket_win.cpp"
+#endif
 
 TEST(SocketClassTests, ServerOpenTest) {
   TCPSocketSrv srv;
