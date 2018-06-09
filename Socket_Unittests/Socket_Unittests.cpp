@@ -11,21 +11,26 @@
 #include "../SockSample/Socket.h"
 #endif
 
-TEST(SocketClassTests, ServerOpenTest) {
+TEST(SocketClassTests, ServerOpenTest)
+{
   TCPSocketSrv srv;
   auto opened = srv.Open(9999);
   EXPECT_TRUE(opened);
+  srv.Close();
 }
 
-TEST(SocketClassTests, ServerOpenSecondTimeTest) {
+TEST(SocketClassTests, ServerOpenSecondTimeTest)
+{
   TCPSocketSrv srv;
   auto opened = srv.Open(9999);
   EXPECT_TRUE(opened);
   opened = srv.Open(19999);
   EXPECT_TRUE(opened);
+  srv.Close();
 }
 
-TEST(SocketClassTests, ServerOpenFailedTest) {
+TEST(SocketClassTests, ServerOpenFailedTest)
+{
   TCPSocketSrv srv1;
   auto s1opened = srv1.Open(9999);
   EXPECT_TRUE(s1opened);
@@ -35,13 +40,15 @@ TEST(SocketClassTests, ServerOpenFailedTest) {
   EXPECT_FALSE(s2opened);
 }
 
-TEST(SocketClassTests, ClientOpenFailedTest) {
+TEST(SocketClassTests, ClientOpenFailedTest)
+{
   TCPSocketClt clt;
   auto opened = clt.Open(9999);
   EXPECT_FALSE(opened);
 }
 
-TEST(SocketClassTests, ClientOpenDiffPortFailedTest) {
+TEST(SocketClassTests, ClientOpenDiffPortFailedTest)
+{
   TCPSocketSrv srv;
   auto sOpened = srv.Open(19999);
   EXPECT_TRUE(sOpened);
@@ -51,7 +58,8 @@ TEST(SocketClassTests, ClientOpenDiffPortFailedTest) {
   EXPECT_FALSE(cOpened);
 }
 
-TEST(SocketClassTests, ClientOpenTest) {
+TEST(SocketClassTests, ClientOpenTest)
+{
   TCPSocketSrv srv;
   auto sOpened = srv.Open(9999);
   EXPECT_TRUE(sOpened);
@@ -61,7 +69,8 @@ TEST(SocketClassTests, ClientOpenTest) {
   EXPECT_TRUE(cOpened);
 }
 
-TEST(SocketClassTests, SendRecvTest) {
+TEST(SocketClassTests, SendRecvTest)
+{
   TCPSocketSrv srv;
   auto sOpened = srv.Open(9999);
   EXPECT_TRUE(sOpened);
@@ -92,7 +101,8 @@ TEST(SocketClassTests, SendRecvTest) {
   EXPECT_TRUE(sData.compare(0, sData.length(), (*cltRecvData.begin()).second.Bytes, 0, (*cltRecvData.begin()).second.Count) == 0);
 }
 
-TEST(SocketClassTests, ManyClientsOpenTest) {
+TEST(SocketClassTests, ManyClientsOpenTest)
+{
   TCPSocketSrv srv;
   auto sOpened = srv.Open(9999);
   EXPECT_TRUE(sOpened);
@@ -105,7 +115,8 @@ TEST(SocketClassTests, ManyClientsOpenTest) {
   }
 }
 
-TEST(SocketClassTests, ManyClientsSendAndRecvTest) {
+TEST(SocketClassTests, ManyClientsSendAndRecvTest)
+{
   TCPSocketSrv srv;
   auto sOpened = srv.Open(9999);
   EXPECT_TRUE(sOpened);
@@ -144,8 +155,9 @@ TEST(SocketClassTests, ManyClientsSendAndRecvTest) {
 }
 
 #if defined(LINUX)
-int main(int argc, char **argv) {
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+int main(int argc, char **argv)
+{
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }
 #endif

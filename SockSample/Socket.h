@@ -8,12 +8,17 @@
 #if defined(WIN32)
 #include <WS2tcpip.h>
 #elif defined(LINUX)
+#include <set>
+#include <sys/socket.h>
 #define SOCKET int
 #endif
 
 class SocketBase
 {
 protected:
+#if defined(LINUX)
+  std::set<SOCKET> acceptedSockets_;
+#endif
   SOCKET sock_;
   fd_set s_read_;
   int SendData(SOCKET destSock, const char *data, size_t dataLen);
