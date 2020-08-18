@@ -4,11 +4,11 @@
 
 #include "BytesData.h"
 #include <map>
+#include <forward_list>
 
 #if defined(WIN32)
 #include <WS2tcpip.h>
 #elif defined(LINUX)
-#include <set>
 #include <sys/socket.h>
 #define SOCKET int
 #endif
@@ -17,19 +17,20 @@ class SocketBase
 {
 protected:
 #if defined(LINUX)
-  std::set<SOCKET> acceptedSockets_;
+  std::forward_list<SOCKET> acceptedSockets_;
 #endif
   SOCKET sock_;
   fd_set s_read_;
   int SendData(SOCKET destSock, const char *data, size_t dataLen);
   fd_set GetAcceptedSockets(SOCKET sock);
-
 public:
   SocketBase();
   virtual ~SocketBase();
   virtual bool Open(unsigned short port, const char *ip = NULL) = 0;
   virtual std::map<SOCKET, BytesData> Recv();
   virtual void Close();
+  size_t GetConnectedSockets(std::forward_list<SOCKET> & sockets);
+  size_t GetMaxAvailableSockets() const;
 };
 
 class TCPSocketSrv : public SocketBase

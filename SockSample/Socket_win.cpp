@@ -3,18 +3,28 @@
 
 #include "Socket.h"
 
-#include <process.h>
 #include <windows.h>
 #include <winsock2.h>
-#include <processthreadsapi.h>
 
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
 
-int SocketBase::SendData(SOCKET destSock, const char * data, size_t dataLen)
+size_t SocketBase::GetConnectedSockets(std::forward_list<SOCKET> & sockets)
 {
-  return send(destSock, data, dataLen, 0);
+  GetAcceptedSockets(this->sock_);
+
+  for(auto s : s_read_.fd_array)
+  {
+    sockets.emplace_front(s);
+  }
+
+  return s_read_.fd_count; 
+}
+
+size_t SocketBase::GetMaxAvailableSockets() const
+{
+  return FD_SETSIZE;
 }
 
 fd_set SocketBase::GetAcceptedSockets(SOCKET sock)
@@ -22,10 +32,19 @@ fd_set SocketBase::GetAcceptedSockets(SOCKET sock)
   while (auto acceptedSock = accept(sock, NULL, NULL))
   {
     if (acceptedSock == INVALID_SOCKET)
-      break;
+    {
+        break;
+    }
     FD_SET(acceptedSock, &s_read_);
   }
   return s_read_;
+}
+
+int SocketBase::SendData(SOCKET destSock, const char * data, size_t dataLen)
+{
+  auto acceptedSock = accept(this->sock_, NULL, NULL);
+
+  return send(destSock, data, dataLen, 0);
 }
 
 SocketBase::SocketBase()
@@ -44,14 +63,17 @@ std::map<SOCKET, BytesData> SocketBase::Recv()
   std::map<SOCKET, BytesData> recvData;
   char recvBuff[SO_MAX_MSG_SIZE];
 
-  Sleep(1);
   fd_set fdset = GetAcceptedSockets(sock_);
-
-  auto sockCount = select(0, &fdset, NULL, NULL, NULL);
-  if (sockCount <= 0)
+  TIMEVAL tval; 
+  tval.tv_usec = 1000;
+  auto sockCount = select(0, &fdset, NULL, NULL, &tval);
+  if (sockCount == 0 || sockCount == SOCKET_ERROR)
+  {
     return recvData;
+  }
 
   for (auto sock : fdset.fd_array)
+  {
     if (FD_ISSET(sock, &fdset))
     {
       auto recvBytes = recv(sock, &recvBuff[0], SO_MAX_MSG_SIZE, MSG_PEEK);
@@ -62,6 +84,7 @@ std::map<SOCKET, BytesData> SocketBase::Recv()
       recv(sock, &recvBuff[0], recvBytes, 0);
       recvData.emplace(sock, BytesData(recvBuff, recvBytes));
     }
+  }
   return recvData;
 }
 

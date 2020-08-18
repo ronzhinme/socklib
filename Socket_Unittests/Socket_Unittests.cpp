@@ -7,6 +7,7 @@
 #include "../SockSample/BytesData.cpp"
 #include "../SockSample/Socket.h"
 #include "../SockSample/Socket_win.cpp"
+#include <winsock2.h>
 #elif defined(LINUX)
 #include "../SockSample/Socket.h"
 #endif
@@ -122,7 +123,6 @@ TEST(SocketClassTests, ManyClientsSendAndRecvTest)
   EXPECT_TRUE(sOpened);
 
   TCPSocketClt clts[FD_SETSIZE - 1];
-  SOCKET cSocks[FD_SETSIZE - 1];
 
   std::string cData = "Hello from client ";
   for (auto i = 0; i < FD_SETSIZE - 1; ++i)
