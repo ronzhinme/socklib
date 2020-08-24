@@ -5,6 +5,7 @@
 
 #include <windows.h>
 #include <winsock2.h>
+#include <string.h>
 
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
@@ -49,6 +50,9 @@ int SocketBase::SendData(SOCKET destSock, const char * data, size_t dataLen)
 
 SocketBase::SocketBase()
 {
+  port_ = 0;
+  host_ = 0;
+
   WSADATA wsaData;
   WSAStartup(MAKEWORD(2, 2), &wsaData);
 }
@@ -65,7 +69,9 @@ std::map<SOCKET, BytesData> SocketBase::Recv()
 
   fd_set fdset = GetAcceptedSockets(sock_);
   TIMEVAL tval; 
-  tval.tv_usec = 1000;
+  tval.tv_sec = 0;
+  tval.tv_usec = 0;
+
   auto sockCount = select(0, &fdset, NULL, NULL, &tval);
   if (sockCount == 0 || sockCount == SOCKET_ERROR)
   {
@@ -129,7 +135,19 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
     return false;
 
   if (listen(sock_, SOMAXCONN) == SOCKET_ERROR)
+  {
     return false;
+  }
+
+  struct sockaddr_in sin;
+  socklen_t len = sizeof(sin);
+  if (getsockname(sock_, (struct sockaddr *)&sin, &len) != NO_ERROR)
+  {
+    return false;
+  }
+
+  port_ = ntohs(sin.sin_port);
+  host_ = sin.sin_addr.s_addr;
 
   freeaddrinfo(resultAddr);
 
@@ -137,6 +155,16 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
   FD_SET(sock_, &s_read_);
 
   return true;
+}
+
+unsigned short SocketBase::GetSocketPort() const
+{
+  return port_;
+}
+
+unsigned long SocketBase::GetSocketHost() const
+{
+  return host_;
 }
 
 int TCPSocketSrv::Send(SOCKET destSock, const char * data, size_t dataLen)
@@ -166,11 +194,13 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
 
   getaddrinfo(NULL, portValue, &localaddr_, &resultAddr);
 
-  for (auto ptr = resultAddr; ptr != NULL; ptr = ptr->ai_next) {
-
+  for (auto ptr = resultAddr; ptr != NULL; ptr = ptr->ai_next) 
+  {
     sock_ = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
     if (sock_ == INVALID_SOCKET)
+    {
       return false;
+    }
 
     if (connect(sock_, ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR)
     {
@@ -178,6 +208,8 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
       continue;
     }
 
+    port_ = ntohs(((struct sockaddr_in*)ptr->ai_addr)->sin_port);
+    host_ = ((struct sockaddr_in*)ptr->ai_addr)->sin_addr.s_addr;
     break;
   }
 

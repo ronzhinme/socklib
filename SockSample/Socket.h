@@ -23,6 +23,8 @@ protected:
   fd_set s_read_;
   int SendData(SOCKET destSock, const char *data, size_t dataLen);
   fd_set GetAcceptedSockets(SOCKET sock);
+  unsigned long host_;
+  unsigned short port_;
 public:
   SocketBase();
   virtual ~SocketBase();
@@ -31,6 +33,8 @@ public:
   virtual void Close();
   size_t GetConnectedSockets(std::forward_list<SOCKET> & sockets);
   size_t GetMaxAvailableSockets() const;
+  unsigned short GetSocketPort() const;
+  unsigned long GetSocketHost() const;
 };
 
 class TCPSocketSrv : public SocketBase
