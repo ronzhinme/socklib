@@ -1,5 +1,6 @@
 
 cmake_minimum_required(VERSION 2.6)
+project(socklib)
 
 IF(DEFINED CMAKE_BUILD_TYPE)
    SET(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE} CACHE STRING "None Debug 
