@@ -28,6 +28,9 @@ if (WIN32)
    #SocketLib
    add_library(socklib STATIC SockSample/BytesData.cpp SockSample/Socket_win.cpp)
    target_compile_definitions(socklib PUBLIC WIN32)
+   
+   add_executable(main_client main_client.cpp)
+   target_link_libraries(main_client socklib)
 
    if(WITH_UNITTEST)
       # UnitTests
