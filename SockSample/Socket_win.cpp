@@ -113,7 +113,7 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
 	ADDRINFO* resultAddr;
 	ADDRINFO localaddr_;
 	ZeroMemory(&localaddr_, sizeof(localaddr_));
-	localaddr_.ai_family = AF_UNSPEC;
+	localaddr_.ai_family = AF_INET;
 	localaddr_.ai_socktype = SOCK_STREAM;
 	localaddr_.ai_protocol = IPPROTO_TCP;
 	localaddr_.ai_flags = AI_PASSIVE;
