@@ -1,5 +1,5 @@
-
 cmake_minimum_required(VERSION 2.6)
+project(socklib)
 
 IF(DEFINED CMAKE_BUILD_TYPE)
    SET(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE} CACHE STRING "None Debug 
@@ -9,12 +9,12 @@ ELSE()
 Release RelWithDebInfo MinSizeRel.")
 ENDIF()
 
-set(WITH_UNITTEST 0)
+set(WITH_UNITTEST 1)
 
 if(WITH_UNITTEST)
 # Locate GTest
-find_package(GTest REQUIRED)
-include_directories(${GTEST_INCLUDE_DIRS})
+SET(CMAKE_BUILD_TYPE Debug)
+include_directories($ENV{GTEST_INCLUDE_DIR})
 endif()
 
 if (WIN32)
@@ -30,10 +30,12 @@ if (WIN32)
 
    if(WITH_UNITTEST)
       # UnitTests
+      set(CMAKE_CXX_FLAGS_RELEASE "/MT")
+      set(CMAKE_CXX_FLAGS_DEBUG "/MTd")
       include_directories(SockSample)
       add_executable(Socket_unittests Socket_Unittests/Socket_Unittests.cpp)
       target_compile_definitions(Socket_unittests PUBLIC WIN32)
-      target_link_libraries(Socket_unittests socklib ${GTEST_LIBRARIES})
+      target_link_libraries(Socket_unittests socklib $ENV{GTEST_LIBRARY_D} $ENV{GTEST_MAIN_LIBRARY_D})
    endif()
 
 elseif (UNIX)
@@ -46,7 +48,7 @@ elseif (UNIX)
       add_executable(Socket_unittests Socket_Unittests/Socket_Unittests.cpp)
       target_compile_definitions(Socket_unittests PUBLIC LINUX)
       target_link_libraries(Socket_unittests socklib)
-      target_link_libraries(Socket_unittests ${GTEST_LIBRARIES} pthread)
+      target_link_libraries(Socket_unittests ${GTEST_LIBRARY} ${GTEST_MAIN_LIBRARY} pthread)
    endif()
 
 elseif (APPLE)
