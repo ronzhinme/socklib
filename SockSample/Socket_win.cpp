@@ -17,30 +17,46 @@ using namespace std::chrono_literals;
 
 size_t SocketBase::GetConnectedSockets()
 {
+	auto res = WSAPoll(pfd_sock_, maxClients_, 100);
+	if (res > 0)
+	{
+		for (auto i = 1; i < maxClients_; ++i)
+		{
+			if (pfd_sock_[i].fd == INVALID_SOCKET)
+			{
+				continue;
+			}
+
+			if (pfd_sock_[i].revents & (POLLIN | POLLHUP))
+			{
+				RemoveConnections(pfd_sock_[i].fd);
+			}
+		}
+	}
+
 	return connectedClients_;
 }
 
-constexpr size_t SocketBase::GetMaxAvailableSockets() const
+const size_t SocketBase::GetMaxAvailableSockets() const
 {
 	return maxClients_ - 1;
 }
 
 void SocketBase::RemoveConnections(SOCKET sock)
 {
-	for (auto i = 0; i < connectedClients_; ++i)
+	for (auto i = 0; i < maxClients_; ++i)
 	{
 		if (pfd_sock_[i].fd == sock)
 		{
-			shutdown(sock, SD_BOTH);
-			closesocket(sock);
-
-			pfd_sock_[i] = pfd_sock_[connectedClients_];
-			pfd_sock_[connectedClients_].fd = INVALID_SOCKET;
+			memcpy(&pfd_sock_[i], &pfd_sock_[connectedClients_], sizeof(struct pollfd));
+			memset(&pfd_sock_[connectedClients_], 0, sizeof(struct pollfd));
+			
+			//printf("Connected clients: [%d] [%d]\n", connectedClients_, sock);
 			--connectedClients_;
-			//printf("Connected clients: [%d]\n", connectedClients_);
 			break;
 		}
 	}
+
 }
 
 int SocketBase::SendData(SOCKET destSock, const char* data, size_t dataLen)
@@ -75,22 +91,14 @@ std::unordered_map<SOCKET, BytesData> SocketBase::Recv()
 	std::unordered_map<SOCKET, BytesData> recvData;
 	char recvBuff[SO_MAX_MSG_SIZE];
 
-	//if (!isServer_)
-	//{
-	//	printf("isServer:[%d] sock_:[%d] fd:[%d] connectedClients_:[%d]\n", isServer_, sock_, pfd_sock_[0].fd, connectedClients_);
-	//}
-
 	auto result = WSAPoll(&pfd_sock_[0], connectedClients_ + 1, 0);
-	if (result <= 0 && isServer_)
+	if (result <= 0)
 	{
-		//printf("result <= 0\n");
 		return recvData;
 	}
 
 	for (auto i = 0; i < connectedClients_ + 1; ++i)
 	{
-		//printf("i:[%d] revents:[%d] events:[%d] [%d] == [%d]!!!!\n", i, pfd_sock_[i].revents, pfd_sock_[i].events, sock_, pfd_sock_[i].fd);
-
 		if (!isServer_ && pfd_sock_[i].fd != sock_)
 		{
 			continue;
@@ -98,15 +106,12 @@ std::unordered_map<SOCKET, BytesData> SocketBase::Recv()
 
 		if ((pfd_sock_[i].revents == 0 || pfd_sock_[i].fd == sock_) && isServer_)
 		{
-			//printf("!!!\n");
 			continue;
 		}
 
 		auto recvBytes = recv(pfd_sock_[i].fd, &recvBuff[0], SO_MAX_MSG_SIZE, MSG_PEEK);
-		//printf("recv bytes:[%d]\n", recvBytes);
 		if (recvBytes <= 0)
 		{
-			printf("recv bytes:[%d] sock:[%d] pfd:[%d] i:[%d] conClients:[%d]\n", recvBytes, sock_, pfd_sock_[i].fd, i, connectedClients_);
 			continue;
 		}
 
@@ -294,6 +299,7 @@ void TCPSocketSrv::AcceptNewConnections()
 			std::this_thread::sleep_for(1ms);
 			std::this_thread::yield();
 		} while (s != INVALID_SOCKET || isConnected_);
+
 
 		std::this_thread::sleep_for(1ms);
 		std::this_thread::yield();

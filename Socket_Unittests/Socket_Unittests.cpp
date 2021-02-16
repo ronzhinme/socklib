@@ -104,6 +104,31 @@ TEST(SocketClassTests, ClientOpenTest)
 	EXPECT_EQ(1, srv.GetConnectedSockets());
 }
 
+TEST(SocketClassTests, ClientOpenAndReadNullTest)
+{
+	int port = 11999;
+	TCPSocketSrv srv;
+	auto sOpened = srv.Open(port);
+	EXPECT_TRUE(sOpened);
+	EXPECT_TRUE(srv.IsConnected());
+	EXPECT_EQ(0, srv.GetConnectedSockets());
+
+	TCPSocketClt clt;
+	auto cOpened = clt.Open(port);
+
+	std::this_thread::sleep_for(10ms);
+
+	EXPECT_TRUE(cOpened);
+	EXPECT_TRUE(clt.IsConnected());
+	EXPECT_EQ(1, srv.GetConnectedSockets());
+
+	for (auto i = 0; i < 1000; ++i)
+	{
+		auto rData = clt.Recv();
+		EXPECT_EQ(0, rData.size());
+	}
+}
+
 TEST(SocketClassTests, SendRecvTest)
 {
 	int port = 10999;
@@ -115,7 +140,7 @@ TEST(SocketClassTests, SendRecvTest)
 	auto cOpened = clt.Open(port);
 	EXPECT_TRUE(cOpened);
 
-	std::this_thread::sleep_for(10ms);
+	std::this_thread::sleep_for(100ms);
 	EXPECT_EQ(1, srv.GetConnectedSockets());
 
 	// check client send
@@ -137,32 +162,121 @@ TEST(SocketClassTests, SendRecvTest)
 	}
 
 	// check client recv
-	auto cltRecvData = clt.Recv();
-	EXPECT_EQ(1, cltRecvData.size());
-	EXPECT_TRUE(sData.compare(0, sData.length(), (*cltRecvData.begin()).second.Bytes, 0, (*cltRecvData.begin()).second.Count) == 0);
+	auto i = 0;
+	while (i++ < 10)
+	{
+		auto cltRecvData = clt.Recv();
+		if (cltRecvData.size() == 0)
+		{
+			continue;
+		}
+
+		EXPECT_EQ(1, cltRecvData.size());
+		EXPECT_TRUE(sData.compare(0, sData.length(), (*cltRecvData.begin()).second.Bytes, 0, (*cltRecvData.begin()).second.Count) == 0);
+		break;
+	}
 }
 
-TEST(SocketClassTests, ManyClientsOpenTest)
+TEST(SocketClassTests, _1024ClientsOpenTest)
+{
+	int port = 49999;
+	TCPSocketSrv srv;
+	auto sOpened = srv.Open(port);
+	EXPECT_TRUE(sOpened);
+	EXPECT_TRUE(srv.IsConnected());
+
+	const auto count = srv.GetMaxAvailableSockets();
+	std::forward_list<TCPSocketClt*> clts;
+	for (auto i = 0; i < count; ++i)
+	{
+		clts.emplace_front(new TCPSocketClt());
+	}
+
+	auto i = 0;
+	for (auto clt : clts)
+	{
+		auto cOpened = clt->Open(port);
+		EXPECT_TRUE(cOpened);
+		EXPECT_TRUE(clt->IsConnected());
+		std::this_thread::sleep_for(10ms);
+		EXPECT_EQ(++i, srv.GetConnectedSockets());
+	}
+}
+
+TEST(SocketClassTests, CountingClientsTest)
+{
+	int port = 50999;
+	TCPSocketSrv srv;
+	auto sOpened = srv.Open(port);
+	EXPECT_TRUE(sOpened);
+	EXPECT_TRUE(srv.IsConnected());
+
+	const auto count = srv.GetMaxAvailableSockets();
+	std::forward_list<TCPSocketClt*> clts;
+	for (auto i = 0; i < 100; ++i)
+	{
+		clts.emplace_front(new TCPSocketClt());
+	}
+
+	auto i = 0;
+	for (auto clt : clts)
+	{
+		auto cOpened = clt->Open(port);
+		EXPECT_TRUE(cOpened);
+		EXPECT_TRUE(clt->IsConnected());
+		std::this_thread::sleep_for(10ms);
+		EXPECT_EQ(++i, srv.GetConnectedSockets());
+		printf(".");
+	}
+
+	printf("\n===\n");
+
+	for (auto clt : clts)
+	{
+		clt->Close();
+		EXPECT_FALSE(clt->IsConnected());
+		std::this_thread::sleep_for(10ms);
+		EXPECT_EQ(--i, srv.GetConnectedSockets());
+		printf("!");
+	}
+
+	printf("\n");
+}
+
+TEST(SocketClassTests, SendClientsAfterCloseTest)
 {
 	int port = 9999;
 	TCPSocketSrv srv;
 	auto sOpened = srv.Open(port);
 	EXPECT_TRUE(sOpened);
 	EXPECT_TRUE(srv.IsConnected());
+	TCPSocketClt c1,c2;
+	auto c1Opened = c1.Open(9999);
+	EXPECT_TRUE(c1Opened);
+	EXPECT_TRUE(c1.IsConnected());
+	auto c2Opened = c2.Open(9999);
+	EXPECT_TRUE(c2Opened);
+	EXPECT_TRUE(c2.IsConnected());
 
-	for (auto i = 0; i < srv.GetMaxAvailableSockets(); ++i)
-	{
-		TCPSocketClt clt;
-		auto cOpened = clt.Open(port);
-		EXPECT_TRUE(cOpened);
-		EXPECT_TRUE(clt.IsConnected());
-		if (!cOpened) printf("%d [connected: %d]\n", i, srv.GetConnectedSockets());
-		std::this_thread::sleep_for(10ms);
-		EXPECT_EQ(i + 1, srv.GetConnectedSockets());
-	}
+	// send before close
+	auto c1Res = c1.Send(".", 1);
+	EXPECT_EQ(c1Res, 1);
+	auto c2Res = c2.Send(".", 1);
+	EXPECT_EQ(c2Res, 1);
+
+	// close 2nd
+	c2.Close();
+	EXPECT_FALSE(c2.IsConnected());
+
+	// send after close
+	c2Res = c2.Send(".", 1);
+	EXPECT_LT(c2Res, 0);
+	c1Res = c1.Send(".", 1);
+	EXPECT_EQ(c1Res, 1);
+
 }
 
-TEST(SocketClassTests, ManyClientsSendAndRecvTest)
+TEST(SocketClassTests, _1024ClientsSendAndRecvTest)
 {
 	int port = 8999;
 	TCPSocketSrv srv;
@@ -186,7 +300,7 @@ TEST(SocketClassTests, ManyClientsSendAndRecvTest)
 		auto cOpened = c->Open(port);
 		EXPECT_TRUE(cOpened);
 
-		std::this_thread::sleep_for(10ms);
+		std::this_thread::sleep_for(100ms);
 		EXPECT_EQ(++i, srv.GetConnectedSockets());
 	}
 
@@ -210,9 +324,19 @@ TEST(SocketClassTests, ManyClientsSendAndRecvTest)
 
 	for (auto c : clts)
 	{
-		auto cltRecvData = c->Recv();
-		EXPECT_EQ(1, cltRecvData.size());
-		EXPECT_TRUE(sData.compare(0, sData.length(), (*cltRecvData.begin()).second.Bytes, 0, (*cltRecvData.begin()).second.Count) == 0);
+		auto i = 0;
+		while (i++ < 10)
+		{
+			auto cltRecvData = c->Recv();
+			if (cltRecvData.size() == 0)
+			{
+				continue;
+			}
+
+			EXPECT_EQ(1, cltRecvData.size());
+			EXPECT_TRUE(sData.compare(0, sData.length(), (*cltRecvData.begin()).second.Bytes, 0, (*cltRecvData.begin()).second.Count) == 0);
+			break;
+		}
 	}
 }
 

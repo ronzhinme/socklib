@@ -36,7 +36,7 @@ public:
 	virtual std::unordered_map<SOCKET, BytesData> Recv();
 	virtual void Close();
 	size_t GetConnectedSockets();
-	constexpr size_t GetMaxAvailableSockets() const;
+	const size_t GetMaxAvailableSockets() const;
 	unsigned short GetSocketPort() const;
 	unsigned long GetSocketHost() const;
 	constexpr bool IsConnected();
