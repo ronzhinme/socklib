@@ -53,6 +53,7 @@ public:
 	~TCPSocketSrv();
 	bool Open(unsigned short port, const char* ip = NULL);
 	int Send(SOCKET destSock, const char* data, size_t dataLen);
+	const SOCKET GetConnectedSocketByIndex(size_t indx) const;
 };
 
 class TCPSocketClt : public SocketBase
