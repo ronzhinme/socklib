@@ -27,7 +27,7 @@ size_t SocketBase::GetConnectedSockets()
 				continue;
 			}
 
-			if (pfd_sock_[i].revents & (POLLIN | POLLHUP))
+			if (pfd_sock_[i].revents & POLLHUP)
 			{
 				RemoveConnections(pfd_sock_[i].fd);
 			}
@@ -91,9 +91,11 @@ std::unordered_map<SOCKET, BytesData> SocketBase::Recv()
 	std::unordered_map<SOCKET, BytesData> recvData;
 	char recvBuff[SO_MAX_MSG_SIZE];
 
+	pfd_sock_->events = POLLRDNORM;
 	auto result = WSAPoll(&pfd_sock_[0], connectedClients_ + 1, 0);
 	if (result <= 0)
 	{
+		//printf("result <= 0 connectedClients_: [%d] , sock_: [%d], pfd_sock_[0].fd: [%d]\n", connectedClients_, sock_, pfd_sock_[0].fd);
 		return recvData;
 	}
 
@@ -101,11 +103,13 @@ std::unordered_map<SOCKET, BytesData> SocketBase::Recv()
 	{
 		if (!isServer_ && pfd_sock_[i].fd != sock_)
 		{
+			//printf("!isServer_ && pfd_sock_[i].fd != sock_ [%d]!=[%d] \n", pfd_sock_[i].fd, sock_);
 			continue;
 		}
 
 		if ((pfd_sock_[i].revents == 0 || pfd_sock_[i].fd == sock_) && isServer_)
 		{
+			//printf("(pfd_sock_[i].revents == 0 || pfd_sock_[i].fd == sock_) && isServer_\n");
 			continue;
 		}
 
@@ -236,16 +240,32 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
 	freeaddrinfo(resultAddr);
 	memset(pfd_sock_, 0, sizeof(pfd_sock_));
 	pfd_sock_[0].fd = sock_;
-	pfd_sock_[0].revents = POLLIN;
 
 	isConnected_ = true;
 	acceptThread_ = new std::thread(&TCPSocketSrv::AcceptNewConnections, this);
+
+	//printf("Srv sock: [%d]\n", sock_);
 	return isConnected_;
 }
 
 int TCPSocketSrv::Send(SOCKET destSock, const char* data, size_t dataLen)
 {
+	//printf("send to  sock: [%d]\n", destSock);
 	return SendData(destSock, data, dataLen);
+}
+
+const SOCKET TCPSocketSrv::GetConnectedSocketByIndex(size_t indx) const
+{
+	//printf("%s ::: indx:[%d] connectedClients_:[%d]\n", __FUNCTION__, indx, connectedClients_);
+	for (auto i = 0; i < connectedClients_ + 1; ++i)
+	{
+		if (i == indx)
+		{
+			return pfd_sock_[i].fd;
+		}
+	}
+
+	return INVALID_SOCKET;
 }
 
 int TCPSocketSrv::GetSocketIndex(SOCKET s)
@@ -336,16 +356,17 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
 	char portValue[6];
 	memset(&portValue[0], 0, 6);
 	_itoa_s(port, portValue, 10);
-	getaddrinfo(NULL, portValue, &localaddr_, &resultAddr);
+	if (getaddrinfo(ip, portValue, &localaddr_, &resultAddr) != 0)
+	{
+		return false;
+	}
 
 	for (auto ptr = resultAddr; ptr != NULL; ptr = ptr->ai_next)
 	{
 		sock_ = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
 		if (sock_ == INVALID_SOCKET)
 		{
-			isConnected_ = false;
-			Close();
-			return isConnected_;
+			continue;
 		}
 
 		if (connect(sock_, ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR)
@@ -369,8 +390,10 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
 	freeaddrinfo(resultAddr);
 	memset(pfd_sock_, 0, sizeof(pfd_sock_));
 	pfd_sock_[0].fd = sock_;
-	pfd_sock_[0].revents = POLLIN;
 	isConnected_ = true;
+
+	//printf("Clt sock: [%d]\n", sock_);
+
 	return isConnected_;
 }
 
