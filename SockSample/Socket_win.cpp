@@ -9,9 +9,9 @@
 #include <chrono>
 #include <stdio.h>
 
-#pragma comment (lib, "Ws2_32.lib")
-#pragma comment (lib, "Mswsock.lib")
-#pragma comment (lib, "AdvApi32.lib")
+#pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Mswsock.lib")
+#pragma comment(lib, "AdvApi32.lib")
 
 using namespace std::chrono_literals;
 
@@ -50,16 +50,15 @@ void SocketBase::RemoveConnections(SOCKET sock)
 		{
 			memcpy(&pfd_sock_[i], &pfd_sock_[connectedClients_], sizeof(struct pollfd));
 			memset(&pfd_sock_[connectedClients_], 0, sizeof(struct pollfd));
-			
+
 			//printf("Connected clients: [%d] [%d]\n", connectedClients_, sock);
 			--connectedClients_;
 			break;
 		}
 	}
-
 }
 
-int SocketBase::SendData(SOCKET destSock, const char* data, size_t dataLen)
+int SocketBase::SendData(SOCKET destSock, const char *data, size_t dataLen)
 {
 	auto result = send(destSock, data, dataLen, 0);
 	//printf("Sent result: [%d] >>>> [%s] [%d] destSock:[%d]\n", result, data, dataLen, destSock);
@@ -119,7 +118,7 @@ std::unordered_map<SOCKET, BytesData> SocketBase::Recv()
 			continue;
 		}
 
-		memset((void*)&recvBuff[0], 0, SO_MAX_MSG_SIZE);
+		memset((void *)&recvBuff[0], 0, SO_MAX_MSG_SIZE);
 		recv(pfd_sock_[i].fd, &recvBuff[0], recvBytes, 0);
 		recvData.emplace(pfd_sock_[i].fd, BytesData(recvBuff, recvBytes));
 	}
@@ -138,7 +137,7 @@ void SocketBase::Close()
 	isConnected_ = false;
 }
 
-constexpr bool SocketBase::IsConnected()
+bool SocketBase::IsConnected() const
 {
 	return isConnected_;
 }
@@ -169,7 +168,7 @@ TCPSocketSrv::~TCPSocketSrv()
 	isConnected_ = false;
 }
 
-bool TCPSocketSrv::Open(unsigned short port, const char* ip)
+bool TCPSocketSrv::Open(unsigned short port, const char *ip)
 {
 	if (isConnected_)
 	{
@@ -180,7 +179,7 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
 		}
 	}
 
-	ADDRINFO* resultAddr;
+	ADDRINFO *resultAddr;
 	ADDRINFO localaddr_;
 	ZeroMemory(&localaddr_, sizeof(localaddr_));
 	localaddr_.ai_family = AF_INET;
@@ -188,10 +187,11 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
 	localaddr_.ai_protocol = IPPROTO_TCP;
 	localaddr_.ai_flags = AI_PASSIVE;
 
-	char portValue[6];
-	memset(&portValue[0], 0, 6);
-	_itoa_s(port, portValue, 10);
-	getaddrinfo(NULL, portValue, &localaddr_, &resultAddr);
+	std::string portValue = std::to_string(port);
+	if (getaddrinfo(ip, portValue.c_str(), &localaddr_, &resultAddr) != 0)
+	{
+		return false;
+	}
 
 	sock_ = socket(resultAddr->ai_family, resultAddr->ai_socktype, resultAddr->ai_protocol);
 	if (sock_ == INVALID_SOCKET)
@@ -228,7 +228,7 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
 
 	struct sockaddr_in sin;
 	socklen_t len = sizeof(sin);
-	if (getsockname(sock_, (struct sockaddr*)&sin, &len) != NO_ERROR)
+	if (getsockname(sock_, (struct sockaddr *)&sin, &len) != NO_ERROR)
 	{
 		isConnected_ = false;
 		return isConnected_;
@@ -248,7 +248,7 @@ bool TCPSocketSrv::Open(unsigned short port, const char* ip)
 	return isConnected_;
 }
 
-int TCPSocketSrv::Send(SOCKET destSock, const char* data, size_t dataLen)
+int TCPSocketSrv::Send(SOCKET destSock, const char *data, size_t dataLen)
 {
 	//printf("send to  sock: [%d]\n", destSock);
 	return SendData(destSock, data, dataLen);
@@ -304,7 +304,7 @@ void TCPSocketSrv::AcceptNewConnections()
 			else
 			{
 				auto i = GetSocketIndex(s);
-				if ( i > -1)
+				if (i > -1)
 				{
 					std::this_thread::sleep_for(1ms);
 					std::this_thread::yield();
@@ -319,7 +319,6 @@ void TCPSocketSrv::AcceptNewConnections()
 			std::this_thread::sleep_for(1ms);
 			std::this_thread::yield();
 		} while (s != INVALID_SOCKET || isConnected_);
-
 
 		std::this_thread::sleep_for(1ms);
 		std::this_thread::yield();
@@ -344,19 +343,17 @@ TCPSocketClt::~TCPSocketClt()
 	Close();
 }
 
-bool TCPSocketClt::Open(unsigned short port, const char* ip)
+bool TCPSocketClt::Open(unsigned short port, const char *ip)
 {
-	ADDRINFO* resultAddr;
+	ADDRINFO *resultAddr;
 	ADDRINFO localaddr_;
 	ZeroMemory(&localaddr_, sizeof(localaddr_));
 	localaddr_.ai_family = AF_INET;
 	localaddr_.ai_socktype = SOCK_STREAM;
 	localaddr_.ai_protocol = IPPROTO_TCP;
 
-	char portValue[6];
-	memset(&portValue[0], 0, 6);
-	_itoa_s(port, portValue, 10);
-	if (getaddrinfo(ip, portValue, &localaddr_, &resultAddr) != 0)
+	std::string portValue = std::to_string(port);
+	if (getaddrinfo(ip, portValue.c_str(), &localaddr_, &resultAddr) != 0)
 	{
 		return false;
 	}
@@ -375,8 +372,8 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
 			continue;
 		}
 
-		port_ = ntohs(((struct sockaddr_in*)ptr->ai_addr)->sin_port);
-		host_ = ((struct sockaddr_in*)ptr->ai_addr)->sin_addr.s_addr;
+		port_ = ntohs(((struct sockaddr_in *)ptr->ai_addr)->sin_port);
+		host_ = ((struct sockaddr_in *)ptr->ai_addr)->sin_addr.s_addr;
 		break;
 	}
 
@@ -397,7 +394,7 @@ bool TCPSocketClt::Open(unsigned short port, const char* ip)
 	return isConnected_;
 }
 
-int TCPSocketClt::Send(const char* data, size_t dataLen)
+int TCPSocketClt::Send(const char *data, size_t dataLen)
 {
 	return SendData(sock_, data, dataLen);
 }

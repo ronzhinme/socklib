@@ -11,8 +11,8 @@
 #include "../SockSample/Socket.h"
 #include "../SockSample/Socket_win.cpp"
 #include <winsock2.h>
-#elif defined(LINUX)
-#include "../SockSample/Socket.h"
+#elif defined(__linux__)
+#include <Socket.h>
 #endif
 #include <forward_list>
 
@@ -21,7 +21,7 @@ using namespace std::chrono_literals;
 TEST(SocketClassTests, ServerOpenTest)
 {
 	TCPSocketSrv srv;
-	auto opened = srv.Open(9999);
+	auto opened = srv.Open(0);
 	EXPECT_TRUE(opened);
 	EXPECT_TRUE(srv.IsConnected());
 
@@ -32,11 +32,11 @@ TEST(SocketClassTests, ServerOpenTest)
 TEST(SocketClassTests, ServerOpenSecondTimeTest)
 {
 	TCPSocketSrv srv;
-	auto opened = srv.Open(9999);
+	auto opened = srv.Open(0);
 	EXPECT_TRUE(opened);
 	EXPECT_TRUE(srv.IsConnected());
 
-	opened = srv.Open(19999);
+	opened = srv.Open(0);
 	EXPECT_TRUE(opened);
 	EXPECT_TRUE(srv.IsConnected());
 
@@ -65,7 +65,7 @@ TEST(SocketClassTests, ServerOpenFailedTest)
 TEST(SocketClassTests, ClientOpenFailedTest)
 {
 	TCPSocketClt clt;
-	auto opened = clt.Open(9999);
+	auto opened = clt.Open(0);
 	EXPECT_FALSE(opened);
 	EXPECT_FALSE(clt.IsConnected());
 }
@@ -83,11 +83,12 @@ TEST(SocketClassTests, ClientOpenDiffPortFailedTest)
 	EXPECT_FALSE(clt.IsConnected());
 
 	EXPECT_EQ(0, srv.GetConnectedSockets());
+	srv.Close();
 }
 
 TEST(SocketClassTests, ClientOpenTest)
 {
-	int port = 11999;
+	int port = 10999;
 	TCPSocketSrv srv;
 	auto sOpened = srv.Open(port);
 	EXPECT_TRUE(sOpened);
@@ -102,11 +103,13 @@ TEST(SocketClassTests, ClientOpenTest)
 	EXPECT_TRUE(cOpened);
 	EXPECT_TRUE(clt.IsConnected());
 	EXPECT_EQ(1, srv.GetConnectedSockets());
+	clt.Close();
+	srv.Close();
 }
 
 TEST(SocketClassTests, ClientOpenAndReadNullTest)
 {
-	int port = 11999;
+	int port = 13999;
 	TCPSocketSrv srv;
 	auto sOpened = srv.Open(port);
 	EXPECT_TRUE(sOpened);
@@ -127,11 +130,14 @@ TEST(SocketClassTests, ClientOpenAndReadNullTest)
 		auto rData = clt.Recv();
 		EXPECT_EQ(0, rData.size());
 	}
+
+	clt.Close();
+	srv.Close();
 }
 
 TEST(SocketClassTests, SendRecvTest)
 {
-	int port = 10999;
+	int port = 12999;
 	TCPSocketSrv srv;
 	auto sOpened = srv.Open(port);
 	EXPECT_TRUE(sOpened);
@@ -175,18 +181,26 @@ TEST(SocketClassTests, SendRecvTest)
 		EXPECT_TRUE(sData.compare(0, sData.length(), (*cltRecvData.begin()).second.Bytes, 0, (*cltRecvData.begin()).second.Count) == 0);
 		break;
 	}
+
+	clt.Close();
+	srv.Close();
 }
 
 TEST(SocketClassTests, _1024ClientsOpenTest)
 {
-	int port = 49999;
+	int port = 39999;
 	TCPSocketSrv srv;
 	auto sOpened = srv.Open(port);
 	EXPECT_TRUE(sOpened);
 	EXPECT_TRUE(srv.IsConnected());
 
+	if(!sOpened)
+	{
+		return;
+	}
+
 	const auto count = srv.GetMaxAvailableSockets();
-	std::forward_list<TCPSocketClt*> clts;
+	std::forward_list<TCPSocketClt *> clts;
 	for (auto i = 0; i < count; ++i)
 	{
 		clts.emplace_front(new TCPSocketClt());
@@ -195,12 +209,20 @@ TEST(SocketClassTests, _1024ClientsOpenTest)
 	auto i = 0;
 	for (auto clt : clts)
 	{
-		auto cOpened = clt->Open(port, i%2==0? "localhost" : "127.0.0.1");
+		auto cOpened = clt->Open(port, i % 2 == 0 ? "localhost" : "127.0.0.1");
 		EXPECT_TRUE(cOpened);
 		EXPECT_TRUE(clt->IsConnected());
 		std::this_thread::sleep_for(10ms);
 		EXPECT_EQ(++i, srv.GetConnectedSockets());
 	}
+
+	for (auto clt : clts)
+	{
+		clt->Close();
+		EXPECT_EQ(--i, srv.GetConnectedSockets());
+	}
+
+	srv.Close();
 }
 
 TEST(SocketClassTests, CountingClientsTest)
@@ -212,7 +234,7 @@ TEST(SocketClassTests, CountingClientsTest)
 	EXPECT_TRUE(srv.IsConnected());
 
 	const auto count = srv.GetMaxAvailableSockets();
-	std::forward_list<TCPSocketClt*> clts;
+	std::forward_list<TCPSocketClt *> clts;
 	for (auto i = 0; i < 100; ++i)
 	{
 		clts.emplace_front(new TCPSocketClt());
@@ -241,6 +263,8 @@ TEST(SocketClassTests, CountingClientsTest)
 	}
 
 	printf("\n");
+
+	srv.Close();
 }
 
 TEST(SocketClassTests, SendClientsAfterCloseTest)
@@ -274,6 +298,9 @@ TEST(SocketClassTests, SendClientsAfterCloseTest)
 	c1Res = c1.Send(".", 1);
 	EXPECT_EQ(c1Res, 1);
 
+	c1.Close();
+	c2.Close();
+	srv.Close();
 }
 
 TEST(SocketClassTests, _1024ClientsSendAndRecvTest)
@@ -288,7 +315,7 @@ TEST(SocketClassTests, _1024ClientsSendAndRecvTest)
 
 	const auto count = srv.GetMaxAvailableSockets();
 
-	std::forward_list<TCPSocketClt*> clts;
+	std::forward_list<TCPSocketClt *> clts;
 	for (auto i = 0; i < count; ++i)
 	{
 		clts.emplace_front(new TCPSocketClt());
@@ -343,10 +370,12 @@ TEST(SocketClassTests, _1024ClientsSendAndRecvTest)
 	{
 		c->Close();
 	}
+
+	srv.Close();
 }
 
 #if defined(LINUX)
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
 	testing::InitGoogleTest(&argc, argv);
 	return RUN_ALL_TESTS();

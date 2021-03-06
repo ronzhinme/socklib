@@ -8,17 +8,15 @@
 
 #if defined(WIN32)
 #include <WS2tcpip.h>
-#elif defined(LINUX)
+#elif defined(__linux__)
 #include <sys/socket.h>
+#include <sys/poll.h>
 #define SOCKET int
 #endif
 
 class SocketBase
 {
 protected:
-#if defined(LINUX)
-	std::forward_list<SOCKET> acceptedSockets_;
-#endif
 	static const size_t maxClients_ = 1024;
 	size_t connectedClients_ = 0;
 	SOCKET sock_;
@@ -39,7 +37,7 @@ public:
 	const size_t GetMaxAvailableSockets() const;
 	unsigned short GetSocketPort() const;
 	unsigned long GetSocketHost() const;
-	constexpr bool IsConnected();
+	bool IsConnected() const;
 };
 
 class TCPSocketSrv : public SocketBase
